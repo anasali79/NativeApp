@@ -8,7 +8,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'http://10.0.2.2:3000';
+const BASE_URL = 'https://todo-backend-d7q0.onrender.com';
 const TOKEN_KEY = '@auth_token';
 
 let unauthorizedHandler: (() => void) | null = null;

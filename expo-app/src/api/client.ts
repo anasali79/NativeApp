@@ -9,10 +9,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
-// Automatically detect machine IP from Expo connection for physical phones on Wi-Fi / hotspot
-const debuggerHost = Constants.expoConfig?.hostUri || (Constants as any)?.manifest?.debuggerHost;
-const hostIp = debuggerHost ? debuggerHost.split(':')[0] : '172.20.10.2';
-export const BASE_URL = `http://${hostIp}:3000`;
+// Production backend on Render (use local IP fallback only if needed)
+export const BASE_URL = 'https://todo-backend-d7q0.onrender.com';
 const TOKEN_KEY = '@auth_token';
 
 let unauthorizedHandler: (() => void) | null = null;
