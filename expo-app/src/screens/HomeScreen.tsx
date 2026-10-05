@@ -1,6 +1,3 @@
-/**
- * Home screen: tasks display, filtering, sorting, and management.
- */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
@@ -14,6 +11,7 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/useTheme';
 import { typography } from '../theme/typography';
 import { spacing, radius } from '../theme/spacing';
@@ -25,6 +23,7 @@ import { TaskRow } from '../components/TaskRow';
 import { EmptyState } from '../components/EmptyState';
 import { AddTaskSheet } from '../components/AddTaskSheet';
 
+// Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -34,19 +33,22 @@ type SortMode = 'smart' | 'deadline' | 'newest';
 type PriorityFilter = 0 | 1 | 2 | 3;
 
 export function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const colors = useTheme();
   const isDark = colors.chalk === '#121A2C';
   const { user, logout } = useAuth();
   const { tasks, loading, error, refresh, add, toggle, update, remove } = useTasks();
 
+  // Sheet state
   const [sheetVisible, setSheetVisible] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
 
+  // Filter state
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(0);
   const [sortMode, setSortMode] = useState<SortMode>('smart');
 
-  // Drain bar time anchor (refreshes every 60s)
+  // Current time for drain bar — updates every 60 seconds
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -56,29 +58,36 @@ export function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  // Compute status counts for segmented switcher
   const counts = useMemo(() => {
-    let open = 0;
-    let done = 0;
+    let openCount = 0;
+    let doneCount = 0;
     tasks.forEach((t) => {
-      if (t.completed) done++;
-      else open++;
+      if (t.completed) doneCount++;
+      else openCount++;
     });
     return {
       all: tasks.length,
-      open,
-      done,
+      open: openCount,
+      done: doneCount,
     };
   }, [tasks]);
 
+  // Filter tasks based on status and priority
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
+      // Status filter
       if (statusFilter === 'open' && task.completed) return false;
       if (statusFilter === 'done' && !task.completed) return false;
+
+      // Priority filter
       if (priorityFilter > 0 && task.priority !== priorityFilter) return false;
+
       return true;
     });
   }, [tasks, statusFilter, priorityFilter]);
 
+  // Group into sections and sort
   const sections = useMemo((): TaskSection[] => {
     if (sortMode === 'deadline') {
       const sorted = sortByDeadline(filteredTasks);
@@ -90,14 +99,18 @@ export function HomeScreen() {
       return sorted.length > 0 ? [{ title: 'All Tasks', data: sorted }] : [];
     }
 
+    // Default: Smart sort with sections (Overdue, Today, Later, Done)
     return buildSections(filteredTasks, now);
   }, [filteredTasks, sortMode, now]);
 
+  // Overdue count for header subtitle
   const overdueCount = useMemo(() => {
     return tasks.filter(
       (t) => !t.completed && t.deadline && new Date(t.deadline).getTime() < now.getTime(),
     ).length;
   }, [tasks, now]);
+
+  const openCount = counts.open;
 
   const todayFormatted = useMemo(() => {
     try {
@@ -252,7 +265,7 @@ export function HomeScreen() {
       />
 
       {/* iOS Premium Glass Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <View style={styles.headerLeft}>
           <Text style={[styles.headerDate, { color: colors.slate }]}>
             {todayFormatted}
@@ -630,9 +643,9 @@ export function HomeScreen() {
           onClearFilters={hasActiveFilters ? clearFilters : undefined}
         />
       ) : (
-        <SectionList<Task, TaskSection>
+        <SectionList
           sections={sections}
-          keyExtractor={(item: Task) => item._id}
+          keyExtractor={(item: { _id: any; }) => item._id}
           renderSectionHeader={renderSectionHeader}
           renderItem={renderItem}
           stickySectionHeadersEnabled={false}
@@ -644,13 +657,21 @@ export function HomeScreen() {
               colors={[colors.signal]}
             />
           }
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 85 },
+          ]}
           showsVerticalScrollIndicator={false}
         />
       )}
 
       {/* Dock button (quick add) */}
-      <View style={styles.dockContainer}>
+      <View
+        style={[
+          styles.dockContainer,
+          { bottom: Math.max(insets.bottom, 16) + 12 },
+        ]}
+      >
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={openAddSheet}
@@ -931,7 +952,6 @@ const styles = StyleSheet.create({
   },
   dockContainer: {
     position: 'absolute',
-    bottom: 24,
     left: 20,
     right: 20,
   },

@@ -11,6 +11,7 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/useTheme';
 import { typography } from '../theme/typography';
 import { spacing, radius } from '../theme/spacing';
@@ -32,6 +33,7 @@ type SortMode = 'smart' | 'deadline' | 'newest';
 type PriorityFilter = 0 | 1 | 2 | 3;
 
 export function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const colors = useTheme();
   const isDark = colors.chalk === '#121A2C';
   const { user, logout } = useAuth();
@@ -263,7 +265,7 @@ export function HomeScreen() {
       />
 
       {/* iOS Premium Glass Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <View style={styles.headerLeft}>
           <Text style={[styles.headerDate, { color: colors.slate }]}>
             {todayFormatted}
@@ -655,13 +657,21 @@ export function HomeScreen() {
               colors={[colors.signal]}
             />
           }
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 85 },
+          ]}
           showsVerticalScrollIndicator={false}
         />
       )}
 
       {/* Dock button (quick add) */}
-      <View style={styles.dockContainer}>
+      <View
+        style={[
+          styles.dockContainer,
+          { bottom: Math.max(insets.bottom, 16) + 12 },
+        ]}
+      >
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={openAddSheet}
@@ -942,7 +952,6 @@ const styles = StyleSheet.create({
   },
   dockContainer: {
     position: 'absolute',
-    bottom: 24,
     left: 20,
     right: 20,
   },
