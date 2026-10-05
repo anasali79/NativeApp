@@ -8,10 +8,12 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { User } from '../domain/types';
 
 // Production backend on Render (use local IP fallback only if needed)
 export const BASE_URL = 'https://todo-backend-d7q0.onrender.com';
 const TOKEN_KEY = '@auth_token';
+const USER_KEY = '@auth_user';
 
 let unauthorizedHandler: (() => void) | null = null;
 
@@ -71,6 +73,40 @@ export async function clearToken() {
 
 export async function getStoredToken(): Promise<string | null> {
   return AsyncStorage.getItem(TOKEN_KEY);
+}
+
+export async function saveSession(token: string, user: User) {
+  await AsyncStorage.multiSet([
+    [TOKEN_KEY, token],
+    [USER_KEY, JSON.stringify(user)],
+  ]);
+}
+
+export async function saveStoredUser(user: User) {
+  await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export async function clearSession() {
+  await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+}
+
+export async function getStoredSession(): Promise<{ token: string | null; user: User | null }> {
+  try {
+    const pairs = await AsyncStorage.multiGet([TOKEN_KEY, USER_KEY]);
+    const token = pairs.find(([k]) => k === TOKEN_KEY)?.[1] || null;
+    const userStr = pairs.find(([k]) => k === USER_KEY)?.[1] || null;
+    let user: User | null = null;
+    if (userStr) {
+      try {
+        user = JSON.parse(userStr);
+      } catch {
+        user = null;
+      }
+    }
+    return { token, user };
+  } catch {
+    return { token: null, user: null };
+  }
 }
 
 // Convenience methods

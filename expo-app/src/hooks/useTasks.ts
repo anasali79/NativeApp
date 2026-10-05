@@ -3,8 +3,11 @@
  * Handles: loading, optimistic updates, rollback on failure.
  */
 import { useReducer, useCallback, useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task, CreateTaskPayload, UpdateTaskPayload } from '../domain/types';
 import * as tasksApi from '../api/tasks';
+
+const TASKS_CACHE_KEY = '@tasks_cache';
 
 // --- State ---
 interface TasksState {
@@ -25,25 +28,28 @@ type TasksAction =
 function tasksReducer(state: TasksState, action: TasksAction): TasksState {
   switch (action.type) {
     case 'loading':
-      return { ...state, loading: true, error: null };
+      return { ...state, loading: state.tasks.length === 0, error: null };
     case 'loaded':
       return { tasks: action.tasks, loading: false, error: null };
     case 'error':
-      return { ...state, loading: false, error: action.message };
-    case 'added':
-      return { ...state, tasks: [action.task, ...state.tasks] };
-    case 'updated':
-      return {
-        ...state,
-        tasks: state.tasks.map((t) =>
-          t._id === action.task._id ? action.task : t,
-        ),
-      };
-    case 'removed':
-      return {
-        ...state,
-        tasks: state.tasks.filter((t) => t._id !== action.id),
-      };
+      return { ...state, loading: false, error: state.tasks.length === 0 ? action.message : null };
+    case 'added': {
+      const nextTasks = [action.task, ...state.tasks];
+      AsyncStorage.setItem(TASKS_CACHE_KEY, JSON.stringify(nextTasks)).catch(() => {});
+      return { ...state, tasks: nextTasks };
+    }
+    case 'updated': {
+      const nextTasks = state.tasks.map((t) =>
+        t._id === action.task._id ? action.task : t,
+      );
+      AsyncStorage.setItem(TASKS_CACHE_KEY, JSON.stringify(nextTasks)).catch(() => {});
+      return { ...state, tasks: nextTasks };
+    }
+    case 'removed': {
+      const nextTasks = state.tasks.filter((t) => t._id !== action.id);
+      AsyncStorage.setItem(TASKS_CACHE_KEY, JSON.stringify(nextTasks)).catch(() => {});
+      return { ...state, tasks: nextTasks };
+    }
     default:
       return state;
   }
@@ -66,15 +72,34 @@ export function useTasks() {
     try {
       const tasks = await tasksApi.fetchTasks();
       dispatch({ type: 'loaded', tasks });
+      AsyncStorage.setItem(TASKS_CACHE_KEY, JSON.stringify(tasks)).catch(() => {});
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Can't reach the server. Pull down to try again.";
       dispatch({ type: 'error', message });
     }
   }, []);
 
-  // Initial fetch
+  // Restore cached tasks immediately on mount, then sync in background
   useEffect(() => {
-    refresh();
+    let isMounted = true;
+    (async () => {
+      try {
+        const cached = await AsyncStorage.getItem(TASKS_CACHE_KEY);
+        if (cached && isMounted) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            dispatch({ type: 'loaded', tasks: parsed });
+          }
+        }
+      } catch {}
+      if (isMounted) {
+        refresh();
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
   }, [refresh]);
 
   /** Add a new task */

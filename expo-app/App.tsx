@@ -3,22 +3,25 @@
  * Shows splash while restoring session, then Auth or Home screen.
  */
 import React from 'react';
-import { View, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
+import { View, Image, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
-import { lightColors } from './src/theme/colors';
 
 function AppContent() {
   const { ready, user } = useAuth();
 
-  // Splash screen while restoring session from AsyncStorage
+  // Splash screen while restoring session from AsyncStorage (no spinner)
   if (!ready) {
     return (
       <View style={styles.splash}>
-        <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#4FB894" />
+        <StatusBar barStyle="dark-content" />
+        <Image
+          source={require('./assets/splash-icon.png')}
+          style={styles.splashIcon}
+          resizeMode="contain"
+        />
       </View>
     );
   }
@@ -40,8 +43,12 @@ export default function App() {
 const styles = StyleSheet.create({
   splash: {
     flex: 1,
-    backgroundColor: '#0B101E',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  splashIcon: {
+    width: 140,
+    height: 140,
   },
 });

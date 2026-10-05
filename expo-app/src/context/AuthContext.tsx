@@ -5,7 +5,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '../domain/types';
 import { loginUser, registerUser, getMe } from '../api/auth';
-import { saveToken, clearToken, getStoredToken, setUnauthorizedHandler } from '../api/client';
+import {
+  saveSession,
+  clearSession,
+  getStoredSession,
+  saveStoredUser,
+  setUnauthorizedHandler,
+} from '../api/client';
 
 interface AuthState {
   user: User | null;
@@ -29,31 +35,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const logout = useCallback(async () => {
-    await clearToken();
-    setState((prev) => ({ ...prev, user: null }));
+    await clearSession();
+    setState({ user: null, ready: true, loading: false });
   }, []);
 
-  // Restore session on app start
+  // Restore session on app start from local storage immediately
   useEffect(() => {
+    let isMounted = true;
+
     const restore = async () => {
       try {
-        const token = await getStoredToken();
+        const { token, user: cachedUser } = await getStoredSession();
         if (token) {
-          const user = await getMe();
-          setState({ user, ready: true, loading: false });
+          // Immediately set user to avoid loading spinner and prevent unauthorized redirect
+          const activeUser = cachedUser || { id: '', email: 'User' };
+          if (isMounted) {
+            setState({ user: activeUser, ready: true, loading: false });
+          }
+
+          // Background sync with server; if server is spinning up or offline, do NOT log out!
+          try {
+            const freshUser = await getMe();
+            if (isMounted) {
+              setState((prev) => ({ ...prev, user: freshUser }));
+            }
+            await saveStoredUser(freshUser);
+          } catch {
+            // Network error / server asleep: user stays logged in!
+            // 401s are handled separately by setUnauthorizedHandler
+          }
         } else {
-          setState({ user: null, ready: true, loading: false });
+          if (isMounted) {
+            setState({ user: null, ready: true, loading: false });
+          }
         }
       } catch {
-        // Token invalid or network error — clear and show auth
-        await clearToken();
-        setState({ user: null, ready: true, loading: false });
+        if (isMounted) {
+          setState({ user: null, ready: true, loading: false });
+        }
       }
     };
+
     restore();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Auto-logout on 401 from any API call
+  // Auto-logout only when the server explicitly returns 401 Unauthorized
   useEffect(() => {
     setUnauthorizedHandler(() => {
       logout();
@@ -64,8 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => ({ ...prev, loading: true }));
     try {
       const response = await loginUser(email, password);
-      await saveToken(response.token);
-      setState((prev) => ({ ...prev, user: response.user, loading: false }));
+      await saveSession(response.token, response.user);
+      setState({ user: response.user, ready: true, loading: false });
     } catch (error) {
       setState((prev) => ({ ...prev, loading: false }));
       throw error;
@@ -76,8 +106,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => ({ ...prev, loading: true }));
     try {
       const response = await registerUser(email, password);
-      await saveToken(response.token);
-      setState((prev) => ({ ...prev, user: response.user, loading: false }));
+      await saveSession(response.token, response.user);
+      setState({ user: response.user, ready: true, loading: false });
     } catch (error) {
       setState((prev) => ({ ...prev, loading: false }));
       throw error;
